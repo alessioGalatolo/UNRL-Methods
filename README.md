@@ -12,7 +12,7 @@ Each method is contained in its own package with its own requirements.txt. This 
 Embedding methods:
 1. DeepWalk - ??
 2. Node2Vec  -??
-3. Line-1 - 70% but missing testing
+3. Line-1 - 100% but missing testing
 4. NetMF - ??
 5. GraphSage - ??
 
