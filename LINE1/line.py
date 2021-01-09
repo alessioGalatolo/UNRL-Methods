@@ -140,4 +140,11 @@ def line1(G: Graph):
     #TODO: check usages outside what written
     return embedding
 
+#test this method
+if __name__ == "__main__":
+    #todo: read graph
+    graph = Graph()
 
+    embedding = line1(graph)
+
+    print(embedding)
