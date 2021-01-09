@@ -9,23 +9,34 @@ import numpy as np
 from math import exp
 import threading
 
+#constants
+N_THREADS = 4 #number of thread for asynchronous gradient descent
+N_SAMPLES = 1000000 #number of samples for training ???
+N_NEGATIVE_SAMPLING = 4
+EMBEDDING_DIMENSION = 2 #the dimension of the embedding
+
+#global variables
+prob, alias = None, None
+embedding = None #the result of the embedding
+rho = 0
+initial_rho = 0
+
 def sigmoid(x):
     return 1 / (1+exp(-x))
 
-
-def get_alias_table(graph: Graph):
+def generate_alias_table(graph: Graph):
     """generate alias table for constant time edge sampling
 
     Args:
         graph (Graph): the graph from which to generate the alias table
-
-    Returns:
-        tuple: the pair of (prob, alias)
     """
     n_edges = graph.number_of_edges()
+    global prob, alias
     prob, alias = [0 for _ in range(n_edges)], [0 for _ in range(n_edges)]
-    weight_sum = 0 #TODO: sum of weights
-    norm_prob = [weight * n_edges / weight_sum for weight in graph.edges.weights]
+    weight_sum = 0 #total sum of weights in graph
+    for _, _, w in graph.edges.data("weight"):
+        weight_sum += w
+    norm_prob = [weight * n_edges / weight_sum for _, _, weight in graph.edges.data("weight")]
     small_block = []
     large_block = []
     for k in range(len(norm_prob) - 1, -1, -1):
@@ -49,48 +60,42 @@ def get_alias_table(graph: Graph):
         prob[small_block.pop()] = 1
     while len(large_block) > 0:
         prob[large_block.pop()] = 1
-        
-    return prob, alias
 
-def sample_edge(structure, rand1, rand2):
+def sample_edge(graph, rand1, rand2):
     """sample a random edge
 
     Args:
-        structure (tuple): must be (graph, porb, alias)
+        graph (Graph): the original graph
         rand1 (Number): random from normal distribution
         rand2 (NUmber): random from normal distribution
 
     Returns:
         Number: the index of the sampled edge
     """
-    graph, prob, alias, _= structure
     k = rand1 * graph.number_of_edges()
     return k if rand2 < prob[k] else alias[k]
 
-def line_thread(seed, constants, structure):
+def line_thread(seed, graph):
     """This is the function used for asynchronous stochastic gradient decent
 
     Args:
         seed (Nuber): It is the id of the thread, will be used as a random seed
-        constants (tuple): the tuple of important constants
-            must be (N_SAMPLES, N_THREADS, N_NEGATIVE_SAMPLING, EMBEDDING_DIMENSION)
-        structure (tuple): the tuple containing the structure of the graph:
-            must be (graph, porb, alias)
+        graph (Graph): the original graph
     """
-    graph, prob, alias, embedding = structure
-    N_SAMPLES, N_THREADS, N_NEGATIVE_SAMPLING, EMBEDDING_DIMENSION = constants
+    global embedding
     n_edges = graph.number_of_edges()
     count = 0
     last_print = 0 #every now and then print whats happening
     while count >= N_SAMPLES  / N_THREADS + 2:
-        #give sign of life
+
+        #give sign of life and update rho
         if count - last_print > 10000:
             last_print = count
             print(f"Thread {seed} had done {count} iterations and is willing to do more")
             #TODO
             
         #sample an edge
-        edge = sample_edge(structure, np.random.normal(), np.random.normal())
+        edge = sample_edge(graph, np.random.normal(), np.random.normal())
         u, v, _ = graph.edges[edge]
         lu = u * EMBEDDING_DIMENSION
         lv = v * EMBEDDING_DIMENSION
@@ -117,18 +122,13 @@ def line_thread(seed, constants, structure):
 
 
         for i, val in enumerate(error_vector):
-            #todo: race condition? in the original implementation 
-            #it doesn't seem to be an issue, check for possible errors 
             embedding[lu + i] = val 
         count += 1
 
 def line1(G: Graph):
-    N_THREADS = 4
-    N_SAMPLES = G.number_of_nodes() #???
-    N_NEGATIVE_SAMPLING = 4
-    EMBEDDING_DIMENSION = 2
+    global embedding
     embedding = [0 for _ in range(len(G.edges) * EMBEDDING_DIMENSION)]
-    prob, alias = get_alias_table(G)
+    generate_alias_table(G)
     
     threads = [threading.Thread(target=line_thread,
         args=(i, (N_SAMPLES, N_THREADS, N_NEGATIVE_SAMPLING, EMBEDDING_DIMENSION), (G, prob, alias, embedding))) for i in range(N_THREADS)]
