@@ -143,13 +143,13 @@ def rw_thread(d_graph: dict, thread_num: int):
 
                 walk.append(walk_to)
 
-            walk = list(map(str, walk))  # Convert all to strings to use word2vec
+            walk = np.array(list(map(str, walk))) # Convert all to strings to use word2vec
 
             walks.append(walk)
 
     pbar.close()
     global random_walks
-    random_walks.append(walks)
+    random_walks.append(np.array(walks))
 
 def generate_random_walks(d_graph: dict):
 
