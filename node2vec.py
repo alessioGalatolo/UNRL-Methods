@@ -107,7 +107,7 @@ def rw_thread(d_graph: dict, thread_num: int):
 
     print('Generating walks (Thread: {})'.format(thread_num))
     pbar = tqdm(total = NUM_WALKS)
-    for n_walk in range(NUM_WALKS):
+    for n_walk in range(int(NUM_WALKS / N_THREADS)):
 
         pbar.update(1)
 
