@@ -11,7 +11,7 @@ Each method is contained in its own package with its own requirements.txt. This 
 # TODOs
 Embedding methods:
 1. DeepWalk - ??
-2. Node2Vec  -??
+2. Node2Vec - 100%
 3. Line-1 - 100% but missing testing
 4. NetMF - ??
 5. GraphSage - ??
@@ -20,7 +20,9 @@ Search of original datasets ??
 1. https://snap.stanford.edu/data/index.html
 2. http://zhang18f.myweb.cs.uwindsor.ca/datasets/#h4.4_blogcatalog-a-href-.-blogcatalog.tar.gz-download-a-
 
-Search of new datasets ??
+Search of new datasets
+1. https://snap.stanford.edu/data/wikipedia-article-networks.html
+2. https://snap.stanford.edu/data/ego-Facebook.html
 
 Implementation of tasks:
 1. Link prediction - 0%

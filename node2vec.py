@@ -1,4 +1,4 @@
-"""
+'''
 By Mar Balibrea Rull (@marbali8)
 
 Resources used:
@@ -9,7 +9,9 @@ Resources used:
     (b) Megha Khosla, Vinay Setty, and Avishek Anand. "A Comparative Study for
     Unsupervised Network Representation Learning." IEEE Transactions on
     Knowledge and Data Engineering (2019).
-"""
+
+    (c) https://radimrehurek.com/gensim/models/word2vec.html#gensim.models.word2vec.Word2Vec
+'''
 
 import numpy as np
 from tqdm.auto import tqdm
@@ -17,17 +19,18 @@ import threading as th
 from collections import defaultdict
 import time
 import random
+import glob
 
 import networkx as nx
-import gensim
+import gensim.models as gem
 
 # 0. Define constants (from https://arxiv.org/pdf/1903.07902.pdf)
 
 # random walk constants
 WALK_LENGTH: int = 40 # Number of nodes in each walk
 NUM_WALKS: int = 80 # Number of walks per source node
-P: int = 0.25
-Q: int = 2
+P: int = 4
+Q: int = 4
 
 # word2vec constants
 N_NEGATIVE_SAMPLING: int = 5
@@ -36,9 +39,8 @@ EMBEDDING_DIMENSION: int = 128 # Embedding dimensions
 
 # computation constants
 N_THREADS: int = 4 # Number of threads for parallel execution
-N_SAMPLES: int = int(1e6) # Number of training samples
 
-DATAPATH = '/Users/marbalibrea/Downloads/Flickr/'
+DATAPATH = '/Users/marbalibrea/Downloads/aml/rw/'
 
 def compute_transition_probabilities(graph: nx.Graph) -> dict:
 
@@ -86,10 +88,10 @@ def compute_transition_probabilities(graph: nx.Graph) -> dict:
             d_graph[intermediate]['prob'][source] = np.array(scores) / sum(scores)
             d_graph[source]['first'] = np.ones(len(neighbours)) / len(neighbours)
 
-            with open(DATAPATH + 'transition_prob_i' + str(intermediate) + 's' + str(source) + '.npy', 'wb') as f:
-                np.save(f, d_graph[intermediate]['prob'][source])
-            with open(DATAPATH + 'transition_first_s' + str(source) + '.npy', 'wb') as f:
-              np.save(f, d_graph[source]['first'])
+            # with open(DATAPATH + 'transition_prob_i' + str(intermediate) + 's' + str(source) + '.npy', 'wb') as f:
+            #     np.save(f, d_graph[intermediate]['prob'][source])
+            # with open(DATAPATH + 'transition_first_s' + str(source) + '.npy', 'wb') as f:
+            #     np.save(f, d_graph[source]['first'])
 
     print(f"Transition probabilities computed. Total time was {time.time() - t_0}.")
     return d_graph
@@ -106,7 +108,7 @@ def rw_thread(d_graph: dict, thread_num: int):
     walks = list()
 
     print('Generating walks (Thread: {})'.format(thread_num))
-    pbar = tqdm(total = NUM_WALKS)
+    pbar = tqdm(total = int(NUM_WALKS / N_THREADS))
     for n_walk in range(int(NUM_WALKS / N_THREADS)):
 
         pbar.update(1)
@@ -132,7 +134,7 @@ def rw_thread(d_graph: dict, thread_num: int):
                 if not walk_options:
                     break
 
-                if len(walk) == 1: # For the first step
+                if len(walk) == 1:  # For the first step
 
                     probabilities = d_graph[walk[-1]]['first']
                     walk_to = np.random.choice(walk_options, size = 1, p = probabilities)[0]
@@ -143,7 +145,7 @@ def rw_thread(d_graph: dict, thread_num: int):
 
                 walk.append(walk_to)
 
-            walk = np.array(list(map(str, walk))) # Convert all to strings to use word2vec
+            walk = np.array(list(map(str, walk)))  # Convert all to strings to use node2vec
 
             walks.append(walk)
 
@@ -172,45 +174,111 @@ def generate_random_walks(d_graph: dict):
 
         global random_walks
         np.save(f, np.array(random_walks))
+    # to retrieve: f = open(PATH, 'rb'), np.load(f, allow_pickle = True), f.close() (+ reshape)
     print(f"Random walks generated. Total time was {time.time() - t_0}.")
 
-
-def node2vec(graph: nx.Graph):
+def node2vec(graph: nx.Graph = None, filename: str = None):
 
     """
     Main function to run node2vec algorithm.
 
     :param graph: The original graph (unweighted).
+    :param filename: A filename with random walks already computed. The graph will be considered first.
 
     """
 
-    print("--------------------------------")
-    print("Executing Node2Vec embedding method")
-    print(f"Number of samples: {N_SAMPLES}")
-    print(f"Negative samples: {N_NEGATIVE_SAMPLING}")
-    print(f"Embedding dimension: {EMBEDDING_DIMENSION}")
-    print("--------------------------------")
-
-    d_graph = compute_transition_probabilities(graph)
     global random_walks
     random_walks = list()
-    generate_random_walks(d_graph)
+    if graph:
 
-    # global embedding
-    # embedding = [(np.random.random() - 0.5) / EMBEDDING_DIMENSION \
-    #     for _ in range(graph.number_of_edges() * EMBEDDING_DIMENSION)]
-    #
-    # print(f"Embedding process ended. Total time was {time.time() - t_0}")
-    # return embedding
+        print("--------------------------------")
+        print("Executing Node2Vec embedding method")
+        print(f"Number of samples: {NUM_WALKS * len(graph.nodes())}")
+        print(f"Negative samples: {N_NEGATIVE_SAMPLING}")
+        print(f"Embedding dimension: {EMBEDDING_DIMENSION}")
+        print("--------------------------------")
+
+        d_graph = compute_transition_probabilities(graph)
+        generate_random_walks(d_graph)
+        np_rw = random_walks.copy()
+
+    elif filename:
+
+        t_0 = time.time()
+        f = open(filename, 'rb')
+        np_rw = np.load(f, allow_pickle = True)
+        f.close()
+        np_rw = np.reshape(np_rw, (np_rw.shape[0] * np_rw.shape[1], -1)) # thread flattening
+
+        print("--------------------------------")
+        print("Executing Node2Vec embedding method")
+        print(f"Number of samples: {np_rw.shape[0]}")
+        print(f"Negative samples: {N_NEGATIVE_SAMPLING}")
+        print(f"Embedding dimension: {EMBEDDING_DIMENSION}")
+        print("--------------------------------")
+
+        print(f"Filename was correctly loaded. Total time was {time.time() - t_0}.")
+
+    else:
+        print('No data was introduced!')
+        return
+
+    # t_0 = time.time()
+    random_walks = []
+    if type(np_rw[0][0]) == type(np.array([])):
+        for rw in np_rw:
+            random_walks.append([b for a in rw for b in a])
+    else: # it's <class 'numpy.str_'>
+        for rw in np_rw:
+            random_walks.append([a for a in rw])
+    # print(f"Pre-processing done. Total time was {time.time() - t_0}.")
+
+    '''
+    Step 3: Train the model.
+    '''
+    print('Starting Word2Vec')
+    t_0 = time.time()
+
+    # - to set: size to EMBEDDING_DIMENSION, window to NS_WINDOW,
+    # sg to 1 (skip-gram), workers to N_THREADS, hs to 0 (negative sampling),
+    # negative to N_NEGATIVE_SAMPLING (number of negative words)
+    # - other: alpha / min_alpha (learning rate), epochs
+    model = gem.Word2Vec(size = EMBEDDING_DIMENSION,  window = NS_WINDOW, \
+                         min_count = 0, sg = 1, workers = N_THREADS, hs = 0, \
+                         negative = N_NEGATIVE_SAMPLING, seed = 8)
+    model.build_vocab(random_walks)
+    model.train(random_walks, total_examples = model.corpus_count, epochs = model.epochs)
+    embedding = {k: model[k] for k in model.wv.vocab.keys()}
+
+    name = filename.split('/')[-1].split('.')[0]
+    path = '/'.join(filename.split('/')[:-1]) + '/'
+    model.save(path + name + '.model')
+    # to retrieve: m = Word2Vec.load(PATH)
+
+    f = open(path + name + '_embedding.npy', 'wb')
+    np.save(f, embedding)
+    f.close()
+    # to retrieve: f = open(PATH, 'rb'), x = np.load(f, allow_pickle = True), x = x.item(), f.close()
+    # model.init_sims(replace = True)
+
+    print(f"Embedding process ended. Total time was {time.time() - t_0}.")
+    return embedding
 
 if __name__ == "__main__":
 
-    with open(DATAPATH + 'edges.csv', 'r') as data:
+    # Option A: To calculate random walks.
+    # IMPORTANT: change P, Q, nx.GRAPH/DIGRAPH and DATAPATH (3 instances)
+    # with open(DATAPATH + 'edges.csv', 'r') as data:
+    #
+    #     graph = nx.parse_edgelist(data, delimiter = ',', create_using = nx.Graph)
+    #
+    #     node2vec(graph, None)
 
-        # CHANGE P AND Q AND nx.GRAPH/DIGRAPH AND DATAPATH!!!!
-        graph = nx.parse_edgelist(data, delimiter = ',', create_using = nx.Graph)
+    # Option B: Random walks already computed. Only does word2vec.
+    for file in glob.glob(DATAPATH + 'random_walks_cora_node.npy'):
 
-        # embedding = node2vec(graph)
-        node2vec(graph)
-
-        # print(embedding)
+        print('')
+        print(file)
+        embedding = node2vec(None, file)
+        print('# words: ' + str(len(list(embedding.keys()))))
+        print('')
