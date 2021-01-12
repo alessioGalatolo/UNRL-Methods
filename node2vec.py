@@ -267,7 +267,7 @@ def node2vec(graph: nx.Graph = None, filename: str = None):
 if __name__ == "__main__":
 
     # Option A: To calculate random walks.
-    # IMPORTANT: change P, Q, nx.GRAPH/DIGRAPH and DATAPATH (3 instances)
+    # IMPORTANT: change P, Q, nx.GRAPH/DIGRAPH (3 instances) and DATAPATH
     # with open(DATAPATH + 'edges.csv', 'r') as data:
     #
     #     graph = nx.parse_edgelist(data, delimiter = ',', create_using = nx.Graph)
