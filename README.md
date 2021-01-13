@@ -16,9 +16,8 @@ Embedding methods:
 4. NetMF - ??
 5. GraphSage - ??
 
-Search of original datasets ??
-1. https://snap.stanford.edu/data/index.html
-2. http://zhang18f.myweb.cs.uwindsor.ca/datasets/#h4.4_blogcatalog-a-href-.-blogcatalog.tar.gz-download-a-
+Search of original datasets 90%
+Missing: DBLP-Au, CoCit
 
 Search of new datasets
 1. https://snap.stanford.edu/data/wikipedia-article-networks.html

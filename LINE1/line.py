@@ -4,7 +4,8 @@ Resources used:
     LINE: Large-scale Information Network Embedding by Jian Tang et al.
     https://github.com/tangjianpku/LINE
 """
-from networkx import Graph
+from networkx import Graph, read_edgelist
+from networkx.classes.function import is_weighted, set_edge_attributes
 import numpy as np
 from math import exp
 import threading
@@ -51,14 +52,20 @@ def generate_negative_table(graph: Graph):
     """
     global negative_table
     sum = 0
+    n_nodes = graph.number_of_nodes()
     por, cur_sum, vid = 0, 0, 0
-    for d in graph.degree:
+    for (node, d) in graph.degree:
         sum += d ** NEG_SAMPLING_POWER
     for i in range(NEG_TABLE_SIZE):
         if (i + 1) / NEG_TABLE_SIZE > por:
-            cur_sum += graph.degree[vid] ** NEG_SAMPLING_POWER
-            por = cur_sum / sum
-            vid += 1
+            while True:
+                try:
+                    cur_sum += graph.degree[vid % n_nodes] ** NEG_SAMPLING_POWER
+                    por = cur_sum / sum
+                    vid += 1
+                    break
+                except KeyError:
+                    vid += 1
         negative_table[i] = vid - 1
 
 def generate_alias_table(graph: Graph):
@@ -69,13 +76,16 @@ def generate_alias_table(graph: Graph):
         graph (Graph): the graph from which to generate the alias table
     """
     global prob, alias
-    prob, alias = [0 for _ in range(graph.number_of_edges())], [0 for _ in range(graph.number_of_edges())]
+    n_edges = graph.number_of_edges()
+    prob, alias = [0 for _ in range(n_edges)], [0 for _ in range(n_edges)]
 
     #total sum of weights in graph
-    weight_sum = 0 
+    weight_sum = 0
+    #the graph has weights
     for _, _, w in graph.edges.data("weight"):
         weight_sum += w
-    norm_prob = [weight * graph.number_of_edges() / weight_sum for _, _, weight in graph.edges.data("weight")]
+    norm_prob = [weight * n_edges / weight_sum for _, _, weight in graph.edges.data("weight")]
+
     small_block = []
     large_block = []
     for i in range(len(norm_prob) - 1, -1, -1):
@@ -145,7 +155,7 @@ def sample_edge(graph, rand1, rand2):
     Returns:
         Number: the index of the sampled edge
     """
-    k = rand1 * graph.number_of_edges()
+    k = int(rand1 * graph.number_of_edges())
     return k if rand2 < prob[k] else alias[k]
 
 def update(lu, lv, error_vector, label):
@@ -173,11 +183,12 @@ def line_thread(seed, graph):
         seed (Nuber): It is the id of the thread, will be used as a random seed
         graph (Graph): the original graph
     """
+    print(f"Thread {seed} has been started")
     global embedding
     count = 0
     last_print = 0 #every now and then print whats happening
     while count <= N_SAMPLES  / N_THREADS + 2:
-
+        print("Done cycle ", count)
         #give sign of life and update rho
         if count - last_print > 1e4:
             current_sample_count = count - last_print
@@ -188,8 +199,8 @@ def line_thread(seed, graph):
                 rho = initial_rho * 1e-4
             
         #sample an edge
-        edge = sample_edge(graph, np.random.normal(), np.random.normal())
-        u, v, _ = graph.edges[edge]
+        edge = sample_edge(graph, np.random.random(), np.random.random())
+        u, v = list(graph.edges)[edge]
         lu = u * EMBEDDING_DIMENSION
         lv = v * EMBEDDING_DIMENSION
 
@@ -211,15 +222,20 @@ def line_thread(seed, graph):
         count += 1
 
 def line1(graph: Graph):
+    global embedding, N_SAMPLES 
+    N_SAMPLES = min(N_SAMPLES, graph.number_of_edges())
     print("--------------------------------")
     print("Executing LINE-1 embedding method")
-    print(f"Number of samples: {N_SAMPLES}M") #TODO: milions?
+    print(f"Number of samples: {N_SAMPLES}")
     print(f"Negative samples: {N_NEGATIVE_SAMPLING}")
     print(f"Embedding dimension: {EMBEDDING_DIMENSION}")
     print(f"Initial rho: {initial_rho}")
     print("--------------------------------")
 
-    global embedding
+    #check if graph has weights
+    if not is_weighted(graph):
+        set_edge_attributes(graph, values = 1, name = 'weight')
+    # embedding = {}
     embedding = [(np.random.random() - 0.5) / EMBEDDING_DIMENSION \
         for _ in range(graph.number_of_edges() * EMBEDDING_DIMENSION)]
     generate_alias_table(graph)
@@ -234,12 +250,12 @@ def line1(graph: Graph):
         thread.join()
     
     print(f"Embedding process ended. Total time was {time() - t_0}")
+    return {i: e for i, e in enumerate(embedding)} #return as dictionary
     return embedding
 
 #test this method
 if __name__ == "__main__":
-    #todo: read graph
-    graph = Graph()
+    graph = read_edgelist("./Datasets/WikiVote.txt", create_using=Graph(), nodetype=int, data=(('weight',float),))
 
     embedding = line1(graph)
 
