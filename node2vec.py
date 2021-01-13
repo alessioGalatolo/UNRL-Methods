@@ -243,7 +243,7 @@ def node2vec(graph: nx.Graph = None, filename: str = None):
     # sg to 1 (skip-gram), workers to N_THREADS, hs to 0 (negative sampling),
     # negative to N_NEGATIVE_SAMPLING (number of negative words)
     # - other: alpha / min_alpha (learning rate), epochs
-    model = gem.Word2Vec(size = EMBEDDING_DIMENSION,  window = NS_WINDOW, \
+    model = gem.Word2Vec(size = EMBEDDING_DIMENSION, window = NS_WINDOW, \
                          min_count = 0, sg = 1, workers = N_THREADS, hs = 0, \
                          negative = N_NEGATIVE_SAMPLING, seed = 8)
     model.build_vocab(random_walks)
