@@ -208,11 +208,10 @@ def node2vec(graph: nx.Graph = None, filename: str = None):
         f = open(filename, 'rb')
         np_rw = np.load(f, allow_pickle = True)
         f.close()
-        np_rw = np.reshape(np_rw, (np_rw.shape[0] * np_rw.shape[1], -1)) # thread flattening
 
         print("--------------------------------")
         print("Executing Node2Vec embedding method")
-        print(f"Number of samples: {np_rw.shape[0]}")
+        print(f"Number of samples: {np_rw.shape[0]*np_rw.shape[1]}")
         print(f"Negative samples: {N_NEGATIVE_SAMPLING}")
         print(f"Embedding dimension: {EMBEDDING_DIMENSION}")
         print("--------------------------------")
@@ -224,6 +223,7 @@ def node2vec(graph: nx.Graph = None, filename: str = None):
         return
 
     # t_0 = time.time()
+    np_rw = np.reshape(np_rw, (np_rw.shape[0] * np_rw.shape[1], -1)) # thread flattening
     random_walks = []
     if type(np_rw[0][0]) == type(np.array([])):
         for rw in np_rw:

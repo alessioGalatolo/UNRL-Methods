@@ -15,6 +15,7 @@ import numpy as np
 from tqdm.auto import tqdm
 import threading as th
 import time
+import random
 import glob
 
 import networkx as nx
@@ -33,7 +34,7 @@ EMBEDDING_DIMENSION: int = 128 # Embedding dimensions
 # computation constants
 N_THREADS: int = 4 # Number of threads for parallel execution
 
-DATAPATH = '/Users/marbalibrea/Downloads/aml/rw/'
+DATAPATH = '/Users/marbalibrea/Downloads/aml/wikipedia-musae/squirrel/'
 
 
 def rw_thread(graph: nx.Graph, thread_num: int):
@@ -68,7 +69,7 @@ def rw_thread(graph: nx.Graph, thread_num: int):
             # Perform walk
             while len(walk) < walk_length:
 
-                walk_options = graph.neighbors(walk[-1])
+                walk_options = list(graph.neighbors(walk[-1]))
 
                 # Skip dead end nodes
                 if not walk_options:
@@ -96,7 +97,7 @@ def generate_random_walks(graph: nx.Graph):
 
     print('Generating the random walks')
     t_0 = time.time()
-    threads = [th.Thread(target = rw_thread, args = (d_graph, i)) for i in range(N_THREADS)]
+    threads = [th.Thread(target = rw_thread, args = (graph, i)) for i in range(N_THREADS)]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -109,25 +110,59 @@ def generate_random_walks(graph: nx.Graph):
     # to retrieve: f = open(PATH, 'rb'), np.load(f, allow_pickle = True), f.close() (+ reshape)
     print(f"Random walks generated. Total time was {time.time() - t_0}.")
 
-def deepwalk(graph: nx.Graph):
+def deepwalk(graph: nx.Graph = None, filename: str = None):
 
     """
     Main function to run deepwalk algorithm.
 
     :param graph: The original graph (unweighted).
+    :param filename: A filename with random walks already computed. The graph will be considered first.
 
     """
 
     global random_walks
     random_walks = list()
+    if graph:
 
-    print("--------------------------------")
-    print("Executing DeepWalk embedding method")
-    print(f"Number of samples: {NUM_WALKS * len(graph.nodes())}")
-    print(f"Embedding dimension: {EMBEDDING_DIMENSION}")
-    print("--------------------------------")
+        print("--------------------------------")
+        print("Executing DeepWalk embedding method")
+        print(f"Number of samples: {NUM_WALKS * len(graph.nodes())}")
+        print(f"Embedding dimension: {EMBEDDING_DIMENSION}")
+        print("--------------------------------")
 
-    generate_random_walks(graph)
+        generate_random_walks(graph)
+        np_rw = np.array(random_walks)
+        filename = DATAPATH + 'r'
+
+    elif filename:
+
+        t_0 = time.time()
+        f = open(filename, 'rb')
+        np_rw = np.load(f, allow_pickle = True)
+        f.close()
+
+        print("--------------------------------")
+        print("Executing DeepWalk embedding method")
+        print(f"Number of samples: {np_rw.shape[0]*np_rw.shape[1]}")
+        print(f"Embedding dimension: {EMBEDDING_DIMENSION}")
+        print("--------------------------------")
+
+        print(f"Filename was correctly loaded. Total time was {time.time() - t_0}.")
+
+    else:
+        print('No data was introduced!')
+        return
+
+    # t_0 = time.time()
+    np_rw = np.reshape(np_rw, (np_rw.shape[0] * np_rw.shape[1], -1)) # thread flattening
+    random_walks = []
+    if type(np_rw[0][0]) == type(np.array([])):
+        for rw in np_rw:
+            random_walks.append([b for a in rw for b in a])
+    else: # it's <class 'numpy.str_'>
+        for rw in np_rw:
+            random_walks.append([a for a in rw])
+    # print(f"Pre-processing done. Total time was {time.time() - t_0}.")
 
     '''
     Step 2: Train the model.
@@ -138,25 +173,24 @@ def deepwalk(graph: nx.Graph):
     # - to set: size to EMBEDDING_DIMENSION, window to WINDOW,
     # sg to 1 (skip-gram), workers to N_THREADS, hs to 1 (hierarchical softmax)
     # - other: alpha / min_alpha (learning rate), epochs
-    # model = gem.Word2Vec(size = EMBEDDING_DIMENSION, window = WINDOW, \
-    #                      min_count = 0, sg = 1, workers = N_THREADS, hs = 1, \
-    #                      seed = 8)
-    # model.build_vocab(random_walks)
-    # model.train(random_walks, total_examples = model.corpus_count, epochs = model.epochs)
-    # embedding = {k: model[k] for k in model.wv.vocab.keys()}
-    #
-    # name = filename.split('/')[-1].split('.')[0]
-    # path = '/'.join(filename.split('/')[:-1]) + '/'
-    # model.save(path + name + '.model')
-    # # to retrieve: m = Word2Vec.load(PATH)
-    #
-    # f = open(path + name + '_embedding.npy', 'wb')
-    # np.save(f, embedding)
-    # f.close()
+    model = gem.Word2Vec(size = EMBEDDING_DIMENSION, window = WINDOW, \
+                         min_count = 0, sg = 1, workers = N_THREADS, hs = 1, \
+                         seed = 8)
+    model.build_vocab(random_walks)
+    model.train(random_walks, total_examples = model.corpus_count, epochs = model.epochs)
+    embedding = {k: model[k] for k in model.wv.vocab.keys()}
+
+    name = filename.split('/')[-1].split('.')[0]
+    path = '/'.join(filename.split('/')[:-1]) + '/'
+    model.save(path + name + '.model')
+    # to retrieve: m = Word2Vec.load(PATH)
+
+    f = open(path + name + '_embedding.npy', 'wb')
+    np.save(f, embedding)
+    f.close()
     # to retrieve: f = open(PATH, 'rb'), x = np.load(f, allow_pickle = True), x = x.item(), f.close()
     # model.init_sims(replace = True)
 
-    embedding = None
     print(f"Embedding process ended. Total time was {time.time() - t_0}.")
     return embedding
 
@@ -168,4 +202,8 @@ if __name__ == "__main__":
 
         graph = nx.parse_edgelist(data, delimiter = ',', create_using = nx.Graph)
 
-        deepwalk(graph)
+        print('')
+        print(DATAPATH)
+        embedding = deepwalk(graph)
+        print('# words: ' + str(len(list(embedding.keys()))))
+        print('')
