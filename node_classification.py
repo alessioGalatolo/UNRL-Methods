@@ -39,11 +39,11 @@ def main(dataset: str, algorithm: str):
     X, y = [embedding[node] for node in labels[0]], list(map(int, labels[1]))
     X, y = np.array(X), np.array(y)
 
-    # 2. Separate train/test (80/20, 5-fold)
 
-    kf = StratifiedKFold(n_splits = 5, shuffle = True, random_state = 8)
+    props = [['l1', 'liblinear'], ['l1', 'saga'], ['l2', 'lbfgs'], ['l2', 'liblinear'], \
+            ['l2', 'saga'], ['elasticnet', 'saga'], ['none', 'lbfgs'], ['none', 'saga']]
+    props = [[p[0], p[1], b, k] for p in props for b in ['balanced', None] for k in ['strat', 'no']]
 
-    # 3. Define model (multi-label classification using one-vs-rest logistic regression)
     # always: multi_class = 'ovr', max_iter = 1000, class_weight = 'balanced'
     # not bad:
     # - 'liblinear', 'l2'
@@ -53,18 +53,31 @@ def main(dataset: str, algorithm: str):
     # others:
     # - 'sag', 'none'
 
-    solvers = ['lbfgs', 'liblinear', 'sag', 'saga']
     f = open(DATAPATH + dataset + '/nodeclass_models_' + algorithm + '.csv', 'w')
-    f.write('solver,avg_mf1,avg_Mf1,time,embedding_doc\n')
-    for s in solvers:
+    f.write('penalty,solver,class_weight,kfold,avg_mf1,avg_Mf1,time,embedding_doc,i\n')
+    for i, p in enumerate(props):
 
+        print(str(i) + '/' + str(len(props)-1), p)
+
+        # 2. Separate train/test (80/20, 5-fold)
+
+        if p[3] is 'strat':
+            kf = StratifiedKFold(n_splits = 5, shuffle = True, random_state = 8)
+            splitting = kf.split(X, y)
+        else:
+            kf = KFold(n_splits = 5, shuffle = True, random_state = 8)
+            splitting = kf.split(X)
+
+        # 3. Define model (multi-label classification using one-vs-rest logistic regression)
+        l1 = 0.5 if p[0] is 'elasticnet' else None
         t_0 = time.time()
-        model = LogisticRegression(multi_class = 'ovr', solver = s, max_iter = 1000, penalty = 'l2', class_weight = 'balanced')
+        model = LogisticRegression(multi_class = 'ovr', solver = p[1], max_iter = 2000, \
+                                    penalty = p[0], class_weight = p[2], l1_ratio = l1)
 
         # 4. Train model
         mf1 = []
         Mf1 = []
-        for train_index, test_index in kf.split(X, y):
+        for train_index, test_index in splitting:
 
             X_train, X_test = X[train_index], X[test_index]
             y_train, y_test = y[train_index], y[test_index]
@@ -86,7 +99,7 @@ def main(dataset: str, algorithm: str):
         a = np.mean(np.array(mf1), axis = 0)*100
         b = np.mean(np.array(Mf1), axis = 0)*100
         # print(a, b)
-        f.write("{},{},{},{},{}\n".format(s, a, b, time.time()-t_0, fe.split('/')[-1]))
+        f.write("{},{},{},{},{},{},{},{},{}\n".format(p[0], p[1], p[2], p[3], a, b, time.time()-t_0, fe.split('/')[-1], i))
 
     f.close()
 
@@ -103,7 +116,7 @@ def main(dataset: str, algorithm: str):
 
 if __name__ == "__main__":
 
-    datasets = ['wikipedia/chameleon', 'wikipedia/squirrel', 'wikipedia/crocodile', 'BlogCatalog', 'Cora', 'PubMed']
+    datasets = ['Cora', 'wikipedia/chameleon', 'wikipedia/squirrel', 'wikipedia/crocodile', 'BlogCatalog', 'PubMed']
     algorithms = ['deepwalk', 'node2vec']
 
     for d in datasets:
