@@ -54,8 +54,11 @@ def main(dataset: str, algorithm: str):
     # - 'sag', 'none'
 
     f = open(DATAPATH + dataset + '/nodeclass_models_' + algorithm + '.csv', 'w')
-    f.write('penalty,solver,class_weight,kfold,avg_mf1,avg_Mf1,time,embedding_doc,i\n')
+    f.write('penalty,solver,class_weight,kfold,avg_mf1,avg_Mf1,time,it,embedding_doc,i\n')
     for i, p in enumerate(props):
+
+        if p[3] is not 'strat' and p[2] is not 'balanced':
+            continue
 
         print(str(i) + '/' + str(len(props)-1), p)
 
@@ -99,8 +102,9 @@ def main(dataset: str, algorithm: str):
         a = np.mean(np.array(mf1), axis = 0)*100
         b = np.mean(np.array(Mf1), axis = 0)*100
         # print(a, b)
-        f.write("{},{},{},{},{},{},{},{},{}\n".format(p[0], p[1], p[2], p[3], a, b, time.time()-t_0, fe.split('/')[-1], i))
-
+        c = "{},{},{},{},{},{},{},{},{}\n".format(p[0], p[1], p[2], p[3], a, b, time.time()-t_0, model.n_iter_, fe.split('/')[-1], i)
+        f.write(c)
+        print(c)
     f.close()
 
     # print(model.classes_)
