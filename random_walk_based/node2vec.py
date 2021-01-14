@@ -29,7 +29,7 @@ import gensim.models as gem
 # random walk constants
 WALK_LENGTH: int = 40 # Number of nodes in each walk
 NUM_WALKS: int = 80 # Number of walks per source node
-P: int = 4
+P: int = 0.25
 Q: int = 4
 
 # word2vec constants
@@ -40,9 +40,9 @@ EMBEDDING_DIMENSION: int = 128 # Embedding dimensions
 # computation constants
 N_THREADS: int = 4 # Number of threads for parallel execution
 
-DATAPATH = '/Users/marbalibrea/Downloads/aml/rw/'
+DATAPATH = '/Users/marbalibrea/Documents/school/master/2020/year2/period2/machine/project/UNRL-Methods/angelo/'
 
-def compute_transition_probabilities(graph: nx.Graph) -> dict:
+def compute_transition_probabilities(graph: nx.DiGraph) -> dict:
 
     """
     Step 1. Compute second order transition probabilities to later
@@ -177,7 +177,7 @@ def generate_random_walks(d_graph: dict):
     # to retrieve: f = open(PATH, 'rb'), np.load(f, allow_pickle = True), f.close() (+ reshape)
     print(f"Random walks generated. Total time was {time.time() - t_0}.")
 
-def node2vec(graph: nx.Graph = None, filename: str = None):
+def node2vec(graph: nx.DiGraph = None, filename: str = None):
 
     """
     Main function to run node2vec algorithm.
@@ -200,7 +200,8 @@ def node2vec(graph: nx.Graph = None, filename: str = None):
 
         d_graph = compute_transition_probabilities(graph)
         generate_random_walks(d_graph)
-        np_rw = random_walks.copy()
+        np_rw = np_rw = np.array(random_walks)
+        filename = DATAPATH + 'r'
 
     elif filename:
 
@@ -268,17 +269,17 @@ if __name__ == "__main__":
 
     # Option A: To calculate random walks.
     # IMPORTANT: change P, Q, nx.GRAPH/DIGRAPH (3 instances) and DATAPATH
-    # with open(DATAPATH + 'edges.csv', 'r') as data:
-    #
-    #     graph = nx.parse_edgelist(data, delimiter = ',', create_using = nx.Graph)
-    #
-    #     node2vec(graph, None)
+    with open(DATAPATH + 'edges.csv', 'r') as data:
+
+        graph = nx.parse_edgelist(data, delimiter = ',', create_using = nx.DiGraph)
+
+        node2vec(graph, None)
 
     # Option B: Random walks already computed. Only does word2vec.
-    for file in glob.glob(DATAPATH + 'random_walks_cora_node.npy'):
-
-        print('')
-        print(file)
-        embedding = node2vec(None, file)
-        print('# words: ' + str(len(list(embedding.keys()))))
-        print('')
+    # for file in glob.glob(DATAPATH + 'random_walks_cora_node.npy'):
+    #
+    #     print('')
+    #     print(file)
+    #     embedding = node2vec(None, file)
+    #     print('# words: ' + str(len(list(embedding.keys()))))
+    #     print('')

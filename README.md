@@ -10,11 +10,11 @@ Each method is contained in its own package with its own requirements.txt. This 
 
 # TODOs
 Embedding methods:
-1. DeepWalk - ??
+1. DeepWalk - 100%
 2. Node2Vec - 100%
 3. Line-1 - 100% but missing testing
 4. NetMF - ??
-5. GraphSage - ??
+5. GraphSage - I want to cry
 
 Search of original datasets 90%
 Missing: DBLP-Au, CoCit
@@ -25,4 +25,4 @@ Search of new datasets
 
 Implementation of tasks:
 1. Link prediction - 0%
-2. Node classification - 0%
+2. Node classification - 70%
