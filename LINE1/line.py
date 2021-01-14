@@ -4,7 +4,7 @@ Resources used:
     LINE: Large-scale Information Network Embedding by Jian Tang et al.
     https://github.com/tangjianpku/LINE
 """
-from networkx import Graph, read_edgelist
+from networkx import Graph, DiGraph, read_edgelist
 from networkx.classes.function import is_weighted, set_edge_attributes
 import numpy as np
 from math import exp
@@ -17,7 +17,7 @@ N_SAMPLES = 1000000 #number of samples for training
 N_NEGATIVE_SAMPLING = 4
 EMBEDDING_DIMENSION = 2 #the dimension of the embedding
 NEG_SAMPLING_POWER = 0.75 #the power to elevate the negative samples
-NEG_TABLE_SIZE = 100000000
+NEG_TABLE_SIZE = 10000000
 SIGMOID_TABLE_SIZE = 1000
 SIGMOID_BOUND = 6 #max and min value for sigmoid
 
@@ -126,7 +126,7 @@ def fast_sigmoid(x):
         return 1
     elif x < -SIGMOID_BOUND:
         return 0
-    k = (x + SIGMOID_BOUND) * SIGMOID_TABLE_SIZE / SIGMOID_BOUND / 2
+    k = int((x + SIGMOID_BOUND) * SIGMOID_TABLE_SIZE / SIGMOID_BOUND / 2)
     return sigmoid_table[k]
 
 def Rand(seed):
@@ -168,19 +168,24 @@ def update(lu, lv, error_vector, label):
         label ([type]): [description]
     """
     x, g = 0, 0
+    if lu not in embedding:
+        embedding[lu] = [np.random.random() - 0.5 / EMBEDDING_DIMENSION for _ in range(EMBEDDING_DIMENSION)]
+    if lv not in embedding:
+        embedding[lv] = [np.random.random() - 0.5 / EMBEDDING_DIMENSION for _ in range(EMBEDDING_DIMENSION)]
+
     for i in range(EMBEDDING_DIMENSION):
-        x += embedding[lu + i] * embedding[lv + i]
+        x += embedding[lu][i] * embedding[lv][i]
     g = (label - fast_sigmoid(x)) * rho
     for i in range(EMBEDDING_DIMENSION):
-        error_vector[i] += g * embedding[lv + i]
-        embedding[lv + i] += g * embedding[lu + i]
+        error_vector[i] += g * embedding[lv][i]
+        embedding[lv][i] += g * embedding[lu][i]
 
 
 def line_thread(seed, graph):
     """This is the function used for asynchronous stochastic gradient decent
 
     Args:
-        seed (Nuber): It is the id of the thread, will be used as a random seed
+        seed (Number): It is the id of the thread, will be used as a random seed
         graph (Graph): the original graph
     """
     print(f"Thread {seed} has been started")
@@ -190,7 +195,7 @@ def line_thread(seed, graph):
     while count <= N_SAMPLES  / N_THREADS + 2:
         print("Done cycle ", count)
         #give sign of life and update rho
-        if count - last_print > 1e4:
+        if count - last_print > 1e3:
             current_sample_count = count - last_print
             last_print = count
             print(f"Thread {seed} had done {count} iterations and is willing to do more")
@@ -201,8 +206,9 @@ def line_thread(seed, graph):
         #sample an edge
         edge = sample_edge(graph, np.random.random(), np.random.random())
         u, v = list(graph.edges)[edge]
-        lu = u * EMBEDDING_DIMENSION
-        lv = v * EMBEDDING_DIMENSION
+        #todo: clean
+        lu = u# * EMBEDDING_DIMENSION
+        lv = v# * EMBEDDING_DIMENSION
 
         error_vector = [0 for _ in range(EMBEDDING_DIMENSION)]
         target, label = 0, 0
@@ -214,14 +220,37 @@ def line_thread(seed, graph):
                 seed, rand_number = Rand(seed)
                 target = negative_table[rand_number]
                 label = 0
-            lv = target * EMBEDDING_DIMENSION
+            lv = target# * EMBEDDING_DIMENSION
             update(lu, lv, error_vector, label)
 
         for i, val in enumerate(error_vector):
-            embedding[lu + i] = val 
+            embedding[lu][i] = val 
         count += 1
 
 def line1(graph: Graph):
+    """Executes LINE1 method on the given graph
+    Note: Line needs to be done on a directed graph
+    if an undirected graph is given, a directed graph is generated
+    where each undirected edge is represented by 2 directed ones
+
+    Args:
+        graph (Graph): An undirected graph
+
+    Returns:
+        dict: contains the pairs (node_id, embedding)
+    """
+    #need directed graph
+    return line1(graph.to_directed())
+
+def line1(graph: DiGraph):
+    """Executed LINE1 method for embedding
+
+    Args:
+        graph (DiGraph): The graph for which to do the embedding
+
+    Returns:
+        dict: contains the pairs (node_id, embedding)
+    """
     global embedding, N_SAMPLES 
     N_SAMPLES = min(N_SAMPLES, graph.number_of_edges())
     print("--------------------------------")
@@ -235,9 +264,7 @@ def line1(graph: Graph):
     #check if graph has weights
     if not is_weighted(graph):
         set_edge_attributes(graph, values = 1, name = 'weight')
-    # embedding = {}
-    embedding = [(np.random.random() - 0.5) / EMBEDDING_DIMENSION \
-        for _ in range(graph.number_of_edges() * EMBEDDING_DIMENSION)]
+    embedding = {}
     generate_alias_table(graph)
     generate_negative_table(graph)
     generate_sigmoid_table()
@@ -250,7 +277,6 @@ def line1(graph: Graph):
         thread.join()
     
     print(f"Embedding process ended. Total time was {time() - t_0}")
-    return {i: e for i, e in enumerate(embedding)} #return as dictionary
     return embedding
 
 #test this method
@@ -259,4 +285,4 @@ if __name__ == "__main__":
 
     embedding = line1(graph)
 
-    print(embedding)
+    # print(embedding)
