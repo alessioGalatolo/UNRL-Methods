@@ -22,10 +22,18 @@ def link_prediction(graph: Graph, method, test_percentage=20):
                 test_edges.append((u, v))
 
     embedding = method(graph)
-    #do what you have to do
+
+    #do what you have to do - may not be the proper way but definitely the fastest
     link_probs = []
     for (u, v) in test_edges:
-        link_probs.append(link_probability(u, v))
+        if u in embedding and v in embedding:
+            u_emb = embedding[u]
+            v_emb = embedding[v]
+        else:
+            print("The node {u} or {v} was not found inside the embedding")
+            exit()
+        link_probs.append(link_probability(u_emb, v_emb))
+
     #normalized by the sigmoid function
     listMax = float(max(link_probs))
     
@@ -36,5 +44,5 @@ if __name__ == "__main__":
     from Datasets.datasets import Datasets, get_graph
     from LINE1.line import line1
 
-    link_prediction(get_graph(Datasets.BlogCatalog), line1)
+    link_prediction(get_graph(Datasets.WikiVote), line1)
     

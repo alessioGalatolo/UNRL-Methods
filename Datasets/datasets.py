@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from networkx import Graph, is_weighted
+from networkx import Graph, DiGraph, is_weighted
 
 #list of available datasets
 class Datasets(Enum):
@@ -17,7 +17,7 @@ class Datasets(Enum):
 
 class Formats(Enum):
     mat = auto()
-    txt = auto()
+    txt = auto() #all graphs with this format are directed
     other = auto()
     
 #given the dataset name will return the filename
@@ -48,11 +48,24 @@ dataset2format = {Datasets.Twitter: Formats.txt,
                     Datasets.Pubmed: "Datasets/Pubmed-Diabetes/" #todo
                 }
 
+dataset2directionality = {Datasets.Twitter: DiGraph(),
+                            Datasets.BlogCatalog: Graph(),
+                            Datasets.YouTube: Graph(),
+                            Datasets.Flickr: Graph(),
+                            Datasets.CitHepPh: DiGraph(),
+                            Datasets.Reddit: Graph(),
+                            Datasets.Cora: DiGraph(),
+                            Datasets.Epinions: DiGraph(),
+                            Datasets.Google: DiGraph(),
+                            Datasets.WikiVote: DiGraph(),
+                            Datasets.Pubmed: DiGraph()
+                        }
+
 def get_graph(dataset: Datasets):
     #datasets in mat format
     filename = dataset2filename[dataset]
     format = dataset2format[dataset]
-    graph = Graph() #the dataset to return 
+    graph = dataset2directionality[dataset] #the graph to return 
     
     if format is Formats.mat:
         from scipy.io import loadmat
@@ -65,11 +78,11 @@ def get_graph(dataset: Datasets):
         #TODO use group as labels
     elif format is Formats.txt:
         from networkx import read_edgelist
-        graph = read_edgelist(filename, create_using=Graph(), nodetype=int, data=(('weight',float),))
+        graph = read_edgelist(filename, create_using=graph, nodetype=int, data=(('weight',float),))
     elif format is Formats.other:
         pass
 
-    #check if graph has weights
+    #check if graph has weights - if not add uniform
     if not is_weighted(graph):
         from networkx import set_edge_attributes
         set_edge_attributes(graph, values = 1, name = 'weight')

@@ -5,11 +5,14 @@ Resources used:
     https://github.com/tangjianpku/LINE
 """
 from networkx import Graph, DiGraph, read_edgelist
+from networkx.algorithms.graph_hashing import weisfeiler_lehman_graph_hash
 from networkx.classes.function import is_weighted, set_edge_attributes
 import numpy as np
 from math import exp
 import threading
 from time import time
+from os.path import isfile
+import pickle 
 
 #constants (values taken from original implementation)
 N_THREADS = 4 #number of thread for asynchronous gradient descent
@@ -189,16 +192,16 @@ def line_thread(seed, graph):
         graph (Graph): the original graph
     """
     print(f"Thread {seed} has been started")
+    thread_id = seed
     global embedding
     count = 0
     last_print = 0 #every now and then print whats happening
     while count <= N_SAMPLES  / N_THREADS + 2:
-        print("Done cycle ", count)
         #give sign of life and update rho
         if count - last_print > 1e3:
             current_sample_count = count - last_print
             last_print = count
-            print(f"Thread {seed} had done {count} iterations and is willing to do more")
+            print(f"Thread {thread_id} had done {count} iterations and is willing to do more")
             rho = initial_rho * (1 - current_sample_count / (N_SAMPLES - 1))
             if rho < initial_rho * 1e-4:
                 rho = initial_rho * 1e-4
@@ -206,9 +209,8 @@ def line_thread(seed, graph):
         #sample an edge
         edge = sample_edge(graph, np.random.random(), np.random.random())
         u, v = list(graph.edges)[edge]
-        #todo: clean
-        lu = u# * EMBEDDING_DIMENSION
-        lv = v# * EMBEDDING_DIMENSION
+        lu = u
+        lv = v
 
         error_vector = [0 for _ in range(EMBEDDING_DIMENSION)]
         target, label = 0, 0
@@ -220,7 +222,7 @@ def line_thread(seed, graph):
                 seed, rand_number = Rand(seed)
                 target = negative_table[rand_number]
                 label = 0
-            lv = target# * EMBEDDING_DIMENSION
+            lv = target
             update(lu, lv, error_vector, label)
 
         for i, val in enumerate(error_vector):
@@ -264,7 +266,15 @@ def line1(graph: DiGraph):
     #check if graph has weights
     if not is_weighted(graph):
         set_edge_attributes(graph, values = 1, name = 'weight')
+
     embedding = {}
+    #check if embedding has already been done (embedding will be saved in the end)
+    graph_filename = "line1_" + weisfeiler_lehman_graph_hash(graph) + ".txt"
+    if isfile(graph_filename):
+        with open(graph_filename, "r") as file:
+            embedding = pickle.loads(file.read())
+        return embedding
+            
     generate_alias_table(graph)
     generate_negative_table(graph)
     generate_sigmoid_table()
@@ -277,12 +287,14 @@ def line1(graph: DiGraph):
         thread.join()
     
     print(f"Embedding process ended. Total time was {time() - t_0}")
+    with open(graph_filename, 'w') as file:
+        pickle.dump(embedding, file)
     return embedding
 
 #test this method
 if __name__ == "__main__":
-    graph = read_edgelist("./Datasets/WikiVote.txt", create_using=Graph(), nodetype=int, data=(('weight',float),))
+    from Datasets.datasets import Datasets, get_graph
 
-    embedding = line1(graph)
+    embedding = line1(get_graph(Datasets.WikiVote))
 
-    # print(embedding)
+    print(embedding)
