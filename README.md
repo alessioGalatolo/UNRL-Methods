@@ -12,7 +12,7 @@ Each method is contained in its own package with its own requirements.txt. This 
 Embedding methods:
 1. DeepWalk - 100%
 2. Node2Vec - 100%
-3. Line-1 - 100% but missing testing
+3. Line-1 - 100%
 4. NetMF - ??
 5. GraphSage - I want to cry
 
@@ -24,5 +24,5 @@ Search of new datasets
 2. https://snap.stanford.edu/data/ego-Facebook.html
 
 Implementation of tasks:
-1. Link prediction - 0%
+1. Link prediction - 50%
 2. Node classification - 70%
