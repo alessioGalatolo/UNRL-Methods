@@ -1,1 +1,1 @@
-:D
+GPU version:https://colab.research.google.com/drive/1oq-fACmizHdnxiCWARKED7Fa0x6-V2Wf?usp=sharing
