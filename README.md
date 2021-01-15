@@ -6,7 +6,33 @@ This repository will contain the following methods for network embedding:
 4. NetMF
 5. GraphSage
 
-Each method is contained in its own package with its own requirements.txt. This is to facilitate the debugging of individual methods. There is (will be) a package with all the datasets that are used
+Each method is contained in its own package (random_walk_based contains 2 methods). This is to facilitate the debugging of individual methods. There is a package with all the datasets that are used and some usefull functions.
+
+# Usage
+Basic usage is:
+```bash
+pip install -r requirements.txt
+python link_prediction.py
+python node_classification.py
+```
+Usage with a virtual environment (linux):
+```bash
+pip install virtualenv
+python -m venv env
+source ./env
+pip install -r requirements.txt
+python link_prediction.py
+python node_classification.py
+```
+
+A possible script to test the methods is:
+```python
+from Datasets.datasets import Datasets, get_graph
+from random_walk_based.deepwalk import deepwalk
+
+dataset = Datasets.Cora
+embedding = deepwalk(get_graph(dataset))
+```
 
 # TODOs
 Embedding methods:
@@ -25,4 +51,4 @@ Search of new datasets
 
 Implementation of tasks:
 1. Link prediction - 100%
-2. Node classification - 70%
+2. Node classification - 100%

@@ -218,32 +218,37 @@ def line_thread(seed, graph):
             embedding[u][i] += val 
         count += 1
 
-def line1(graph: Graph, ):
+def line1(graph: Graph, graph_name=None):
     """Executes LINE1 method on the given graph
+    Will save the embedding on a file "line1_" + graph_name if given
+    If not given a hashing of the graph will be used (SLOW)
     Note: Line needs to be done on a directed graph
     if an undirected graph is given, a directed graph is generated
     where each undirected edge is represented by 2 directed ones
 
     Args:
         graph (Graph): An undirected graph
-
+        graph_name (str): If given will be used for saving the embedding to file
     Returns:
         dict: contains the pairs (node_id, embedding)
     """
     #need directed graph
-    return line1(graph.to_directed())
+    return line1(graph.to_directed(), graph_name)
 
-def line1(graph: DiGraph):
+def line1(graph: DiGraph, graph_name=None):
     """Executed LINE1 method for embedding
+    Will save the embedding on a file "line1_" + graph_name if given
+    If not given a hashing of the graph will be used (SLOW)
 
     Args:
         graph (DiGraph): The graph for which to do the embedding
+        graph_name (str): If given will be used for saving the embedding to file
 
     Returns:
         dict: contains the pairs (node_id, embedding)
     """
     global embedding, N_SAMPLES
-    N_SAMPLES = max(graph.number_of_edges(), graph.number_of_nodes())
+    N_SAMPLES = min(graph.number_of_edges(), graph.number_of_nodes())
     print("--------------------------------")
     print("Executing LINE-1 embedding method")
     print(f"Number of samples: {N_SAMPLES}")
@@ -258,8 +263,12 @@ def line1(graph: DiGraph):
 
     embedding = {u: [(np.random.random() - 0.5) / EMBEDDING_DIMENSION for _ in range(EMBEDDING_DIMENSION)] 
                 for u in graph.nodes}
+
     #check if embedding has already been done (embedding will be saved in the end)
-    graph_filename = "line1_" + weisfeiler_lehman_graph_hash(graph) + ".txt"
+    if graph_name is None:
+        graph_filename = "line1_" + weisfeiler_lehman_graph_hash(graph) + ".txt"
+    else:
+        graph_filename = "line1_" + graph_name + ".txt"
     if isfile(graph_filename):
         with open(graph_filename, "rb") as file:
             embedding = pickle.loads(file.read())

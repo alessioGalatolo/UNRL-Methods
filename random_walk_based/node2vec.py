@@ -40,7 +40,7 @@ EMBEDDING_DIMENSION: int = 128 # Embedding dimensions
 # computation constants
 N_THREADS: int = 4 # Number of threads for parallel execution
 
-DATAPATH = '/Users/marbalibrea/Documents/school/master/2020/year2/period2/machine/project/UNRL-Methods/angelo/'
+DATAPATH = 'Datasets/lastfm_asia/'
 
 def compute_transition_probabilities(graph: nx.DiGraph) -> dict:
 
@@ -87,11 +87,6 @@ def compute_transition_probabilities(graph: nx.DiGraph) -> dict:
             # From scores to probabilities
             d_graph[intermediate]['prob'][source] = np.array(scores) / sum(scores)
             d_graph[source]['first'] = np.ones(len(neighbours)) / len(neighbours)
-
-            # with open(DATAPATH + 'transition_prob_i' + str(intermediate) + 's' + str(source) + '.npy', 'wb') as f:
-            #     np.save(f, d_graph[intermediate]['prob'][source])
-            # with open(DATAPATH + 'transition_first_s' + str(source) + '.npy', 'wb') as f:
-            #     np.save(f, d_graph[source]['first'])
 
     print(f"Transition probabilities computed. Total time was {time.time() - t_0}.")
     return d_graph
@@ -170,11 +165,6 @@ def generate_random_walks(d_graph: dict):
     for thread in threads:
         thread.join()
 
-    with open(DATAPATH + 'random_walks.npy', 'wb') as f:
-
-        global random_walks
-        np.save(f, np.array(random_walks))
-    # to retrieve: f = open(PATH, 'rb'), np.load(f, allow_pickle = True), f.close() (+ reshape)
     print(f"Random walks generated. Total time was {time.time() - t_0}.")
 
 def node2vec(graph: nx.DiGraph = None, filename: str = None):
@@ -223,7 +213,6 @@ def node2vec(graph: nx.DiGraph = None, filename: str = None):
         print('No data was introduced!')
         return
 
-    # t_0 = time.time()
     np_rw = np.reshape(np_rw, (np_rw.shape[0] * np_rw.shape[1], -1)) # thread flattening
     random_walks = []
     if type(np_rw[0][0]) == type(np.array([])):
@@ -232,7 +221,6 @@ def node2vec(graph: nx.DiGraph = None, filename: str = None):
     else: # it's <class 'numpy.str_'>
         for rw in np_rw:
             random_walks.append([a for a in rw])
-    # print(f"Pre-processing done. Total time was {time.time() - t_0}.")
 
     '''
     Step 3: Train the model.
@@ -249,18 +237,10 @@ def node2vec(graph: nx.DiGraph = None, filename: str = None):
                          negative = N_NEGATIVE_SAMPLING, seed = 8)
     model.build_vocab(random_walks)
     model.train(random_walks, total_examples = model.corpus_count, epochs = model.epochs)
-    embedding = {k: model[k] for k in model.wv.vocab.keys()}
+    embedding = {int(k): model[k] for k in model.wv.vocab.keys()}
 
     name = filename.split('/')[-1].split('.')[0]
     path = '/'.join(filename.split('/')[:-1]) + '/'
-    model.save(path + name + '.model')
-    # to retrieve: m = Word2Vec.load(PATH)
-
-    f = open(path + name + '_embedding.npy', 'wb')
-    np.save(f, embedding)
-    f.close()
-    # to retrieve: f = open(PATH, 'rb'), x = np.load(f, allow_pickle = True), x = x.item(), f.close()
-    # model.init_sims(replace = True)
 
     print(f"Embedding process ended. Total time was {time.time() - t_0}.")
     return embedding
@@ -274,12 +254,3 @@ if __name__ == "__main__":
         graph = nx.parse_edgelist(data, delimiter = ',', create_using = nx.DiGraph)
 
         node2vec(graph, None)
-
-    # Option B: Random walks already computed. Only does word2vec.
-    # for file in glob.glob(DATAPATH + 'random_walks_cora_node.npy'):
-    #
-    #     print('')
-    #     print(file)
-    #     embedding = node2vec(None, file)
-    #     print('# words: ' + str(len(list(embedding.keys()))))
-    #     print('')

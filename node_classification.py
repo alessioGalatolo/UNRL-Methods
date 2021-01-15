@@ -17,26 +17,29 @@ import time
 from sklearn.metrics import f1_score
 from sklearn.model_selection import KFold, StratifiedKFold, cross_validate
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import LabelEncoder
+from Datasets.datasets import Datasets, get_graph, dataset2filename
 
-# def maxvote(v, N, k) -> :
 
-DATAPATH = 'data/'
 
-def main(dataset: str, algorithm: str):
+
+
+def node_classification(dataset, algorithm):
     # 1. Get the embedding, the graph and the lables
 
-    print(dataset, algorithm)
-    file_edges = open(DATAPATH + dataset + '/edges.csv', 'r')
-    fe = sorted(glob.glob(DATAPATH + dataset + '/*embedding*' + algorithm +'*.npy'))[::-1][0]
-    file_embedding = open(fe, 'rb')
+    embedding = algorithm(get_graph(dataset))
+    path = dataset2filename[dataset]
 
-    graph = nx.parse_edgelist(file_edges, delimiter = ',', create_using = nx.DiGraph)
-    embedding = np.load(file_embedding, allow_pickle = True)
-    embedding = embedding.item()
+    labels = np.genfromtxt(path + 'group-edges.csv', delimiter = ',', dtype = '<U20').T
+    
+    try:
+        int(labels[1][0])
+    except ValueError:
+        #labels need encoding
+        le = LabelEncoder()
+        labels[1] = le.fit_transform(labels[1])
 
-    labels = np.genfromtxt(DATAPATH + dataset + '/group-edges.csv', delimiter = ',', dtype = '<U20').T
-
-    X, y = [embedding[node] for node in labels[0]], list(map(int, labels[1]))
+    X, y = [embedding[int(node)] for node in labels[0]], list(map(int, labels[1]))
     X, y = np.array(X), np.array(y)
 
 
@@ -44,17 +47,6 @@ def main(dataset: str, algorithm: str):
             ['l2', 'saga'], ['elasticnet', 'saga'], ['none', 'lbfgs'], ['none', 'saga']]
     props = [[p[0], p[1], b, k] for p in props for b in ['balanced', None] for k in ['strat', 'no']]
 
-    # always: multi_class = 'ovr', max_iter = 1000, class_weight = 'balanced'
-    # not bad:
-    # - 'liblinear', 'l2'
-    # - 'sag', 'l2'
-    # - 'saga', != 'none'
-
-    # others:
-    # - 'sag', 'none'
-
-    f = open(DATAPATH + dataset + '/nodeclass_models_' + algorithm + '.csv', 'w')
-    f.write('penalty,solver,class_weight,kfold,avg_mf1,avg_Mf1,time,it,embedding_doc,i\n')
     for i, p in enumerate(props):
 
         if p[3] is not 'strat' and p[2] is not 'balanced':
@@ -86,8 +78,6 @@ def main(dataset: str, algorithm: str):
             y_train, y_test = y[train_index], y[test_index]
 
             model.fit(X_train, y_train)
-            # print(model.n_iter_)
-            # cross_validate(model, X, y, cv = 5, scoring = ('f1_micro', 'f1_macro'))
 
             # 5. Test model + compute metrics
 
@@ -102,28 +92,11 @@ def main(dataset: str, algorithm: str):
         a = np.mean(np.array(mf1), axis = 0)*100
         b = np.mean(np.array(Mf1), axis = 0)*100
         # print(a, b)
-        c = "{},{},{},{},{},{},{},{},{}\n".format(p[0], p[1], p[2], p[3], a, b, time.time()-t_0, model.n_iter_, fe.split('/')[-1], i)
-        f.write(c)
+        c = "{},{},{},{},{},{},{},{}\n".format(p[0], p[1], p[2], p[3], a, b, time.time()-t_0, model.n_iter_, i)
         print(c)
-    f.close()
-
-    # print(model.classes_)
-
-
-    # 6. Compute Max-Vote baseline
-
-    # maxvote = maxvote()
-
-    # Mf1_maxvote = 0
-    # mf1_maxvote = 0
 
 
 if __name__ == "__main__":
+    from netmf.netmf import netmf
 
-    datasets = ['Cora', 'wikipedia/chameleon', 'wikipedia/squirrel', 'wikipedia/crocodile', 'BlogCatalog', 'PubMed']
-    algorithms = ['deepwalk', 'node2vec']
-
-    for d in datasets:
-        for a in algorithms:
-
-            main(d, a)
+    node_classification(Datasets.BlogCatalog, netmf)

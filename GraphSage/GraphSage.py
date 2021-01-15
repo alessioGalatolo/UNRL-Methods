@@ -28,7 +28,7 @@ def method(G):
     for k in range(K):
         W.append(torch.nn.Parameter(torch.FloatTensor(network_par[k],network_par[k+1]),requires_grad=True))
         torch.nn.init.xavier_normal_(W[k])
-    h0 =  torch.Tensor.float(torch.from_numpy(almostOldInitializeEmbedding(N,N)))#torch.rand(N,network_par[0])
+    h0 =  torch.Tensor.float(torch.from_numpy(almostOldInitializeEmbedding(N,N)))
 
     print("Starting training")    
     Z=train(A,K,W,h0,epoch,network_par,Q,s_size)
@@ -38,44 +38,42 @@ def method(G):
         embedding[nodes_list[i]] = Z[i].tolist()
     return embedding
     
-def main():
-    #np.random.seed(0)
-    #random.seed(0)
-    #torch.manual_seed(0)
-    GraphFileName = "Data/lastfm_asia_edges.csv"#"Data/cora.csv"#"Data/Pubmed-Diabetes.DIRECTED.cites.tab"##"Data/exampleTOY.dat"#"Data/cora.csv"  #"
+def graphSage(G = None, GraphFileName = None):
+    if G is None:
+        if GraphFileName is None:
+            GraphFileName = "Datasets/lastfm_asia/edges.csv"#"Data/cora.csv"#"Data/Pubmed-Diabetes.DIRECTED.cites.tab"##"Data/exampleTOY.dat"#"Data/cora.csv"
+        #Graph loading
+        print("Reading the graph")
+        G = nx.read_edgelist(GraphFileName, delimiter=',')
     K = 2 
     Q = 10
     epoch = 20
     s_size = [10,5]
-    #torch.autograd.set_detect_anomaly(True)
-    #torch.autograd.set_detect_anomaly(True)
-    #Graph loading
-    print("Reading the graph")
-    G = nx.read_edgelist(GraphFileName, delimiter=',')
     print("clustering coeff:", nx.average_clustering(G), "T:", nx.transitivity(G))
     #nx.draw(G,with_labels = True)
     print("Generating Adj matrix, size:",len(G))
     A = nx.adjacency_matrix(G).todense()
     nodes_list = np.array(list(G.nodes()))
     N = A.shape[0]
-    network_par = [N,128,128]#[N,128,128] #Initial size, hidden layer, embedding
+    network_par = [N,128,128] #Initial size, hidden layer, embedding
     W = []
     print("Initializing parameters")
     for k in range(K):
         W.append(torch.nn.Parameter(torch.FloatTensor(network_par[k],network_par[k+1]),requires_grad=True))
         torch.nn.init.xavier_normal_(W[k])
-    h0 =  torch.Tensor.float(torch.from_numpy(almostOldInitializeEmbedding(N,N)))#torch.rand(N,network_par[0])
+    h0 =  torch.Tensor.float(torch.from_numpy(almostOldInitializeEmbedding(N,N)))
 
     print("Starting training")    
     Z=train(A,K,W,h0,epoch,network_par,Q,s_size)
-    saveOnFile(Z,nodes_list)
-    
-def saveOnFile(Z,nodes_list):
     N=Z.shape[0]
     embedding = {}
     for i in range(N):
         embedding[nodes_list[i]] = Z[i].tolist()
-    path = "Output/"
+    saveOnFile(embedding)
+    return embedding
+    
+def saveOnFile(embedding):
+    path = ""
     name = "feather"
     f = open(path + name + '_embedding.npy', 'wb')
     np.save(f, embedding)
@@ -91,16 +89,9 @@ def train(A,K,W,h0,epoch,network_par,Q,s_size):
     print("\tGenerating random Walks")
     positiveSample = generatePositiveSample(A)
     for e in tqdm(range(epoch)):
-        #print("\tEpoch {}".format(e))
         #print("\t\tForward pass")
         Z = GraphSAGEmbeddingGen(A,W,h0,network_par,K,s_size)
-        #print(Z[0][:5].data)
-        #print(Z[1][:5].data)
-        #print(torch.nn.functional.cosine_similarity(Z[0].view(1,-1), Z))
-        #print("\t\tNegative sampling")
         negativeSample = generateNegativeSample(A,Q)
-        #loss = torch.zeros(1)
-        #loss = []
         #print("\t\tComputing Loss")
         loss = torch.zeros(N)
         for i in range(N):
@@ -113,28 +104,12 @@ def train(A,K,W,h0,epoch,network_par,Q,s_size):
             neg_loss = Q*torch.mean(torch.log(torch.sigmoid(-neg_loss)), 0)
             pos_loss = torch.nn.functional.cosine_similarity(Zu.view(1,-1),Zv.view(1,-1))
             pos_loss = torch.log(torch.sigmoid(pos_loss))
-            #loss.append(torch.mean(- pos_loss - neg_loss).view(1,-1))
             loss[i] = - pos_loss - neg_loss
-            #print(loss.data)
         print('\n',torch.nn.functional.cosine_similarity(Z[0].view(1,-1), Z))
         loss.sum().backward(retain_graph=True)
         optimizer.step()
-        #final_loss = torch.mean(loss)
-        #final_loss.backward()
-        
-        #loss.backward()
-        #print(h0)
-        
-            
-        #print(loss.data)
-    #print(Z[0].data)
-    
-    #print(Z.data)
-    #print(torch.nn.functional.cosine_similarity(Z[0].view(1,-1), Z))
     return Z
-#N = len(G) # Number of nodes
-#D = [val for (node, val) in G.degree()]
-#nx.draw(G, pos=nx.circular_layout(G), node_color='r', edge_color='b')
+    
 def almostOldInitializeEmbedding(N,m):
     if N < m:
         return np.concatenate((np.identity(N), np.zeros((N,m-N))), axis=1)
@@ -156,9 +131,8 @@ def GraphSAGEmbeddingGen(A,W,h0, network_par, K,s_size, Aggregator='mean'):
         for v in range(N):
             hN = Sample(A,v,h[k],K,s_size)
             out = MeanAggregator(h[k][v],hN,W[k])
-            h[k+1][v] = out#/torch.norm(out)
-
-    return h[K]#/torch.norm(h[K])
+            h[k+1][v] = out
+    return h[K]
 
 def MeanAggregator(h_self, h_neigh,W): # h_self should be 1xN and H_neigh should be MxN
     h=torch.cat((h_self.reshape(1,-1), h_neigh),0)
@@ -223,4 +197,4 @@ def generateNegativeSample(A,Q):
 
 
 if __name__ == "__main__":
-    main()
+    graphSage()
