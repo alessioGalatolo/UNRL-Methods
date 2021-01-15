@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.sparse as sparse
 from scipy.sparse import linalg
-import networkx
+import networkx as nx
 
 def vol(A):
     """Calculate volume of a graph
@@ -112,8 +112,15 @@ def netmf(G, large = True, window = 10, b = 1, dimension = 128, h = 256):
         dimension (int): dimension of the embedding
         h (int): dimension of the intermediary image
     """
+    G = G.to_undirected()
     A = nx.adjacency_matrix(G)
     if large :
-        return large_embedding(A, window, b, dimension, h)
+        matrix = large_embedding(A, window, b, dimension, h)
     else :
-        return small_embedding(A, window, b, dimension)
+        matrix = small_embedding(A, window, b, dimension)
+    return {list(G.nodes)[i]: x.tolist() for i, x in enumerate(matrix)}
+
+
+if __name__ == "__main__":
+    from Datasets.datasets import Datasets, get_graph
+    print(netmf(get_graph(Datasets.Pubmed)))
