@@ -15,12 +15,12 @@ from os.path import isfile
 import pickle 
 
 #constants (values taken from original implementation)
-N_THREADS = 4 #number of thread for asynchronous gradient descent
-N_SAMPLES = 1000000 #number of samples for training
+N_THREADS = 1 #number of thread for asynchronous gradient descent
+N_SAMPLES = 50000 #number of samples for training
 N_NEGATIVE_SAMPLING = 4
-EMBEDDING_DIMENSION = 2 #the dimension of the embedding
+EMBEDDING_DIMENSION = 124 #the dimension of the embedding
 NEG_SAMPLING_POWER = 0.75 #the power to elevate the negative samples
-NEG_TABLE_SIZE = 10000000
+NEG_TABLE_SIZE = 100000
 SIGMOID_TABLE_SIZE = 1000
 SIGMOID_BOUND = 6 #max and min value for sigmoid
 
@@ -57,19 +57,14 @@ def generate_negative_table(graph: Graph):
     sum = 0
     n_nodes = graph.number_of_nodes()
     por, cur_sum, vid = 0, 0, 0
-    for (node, d) in graph.degree:
+    for (_, d) in graph.degree:
         sum += d ** NEG_SAMPLING_POWER
     for i in range(NEG_TABLE_SIZE):
         if (i + 1) / NEG_TABLE_SIZE > por:
-            while True:
-                try:
-                    cur_sum += graph.degree[vid % n_nodes] ** NEG_SAMPLING_POWER
-                    por = cur_sum / sum
-                    vid += 1
-                    break
-                except KeyError:
-                    vid += 1
-        negative_table[i] = vid - 1
+            cur_sum += graph.degree[list(graph.nodes)[vid % n_nodes]] ** NEG_SAMPLING_POWER
+            por = cur_sum / sum
+            vid += 1
+        negative_table[i] = list(graph.nodes)[vid - 1 % n_nodes]
 
 def generate_alias_table(graph: Graph):
     """ generate alias table for constant time edge sampling.
@@ -161,27 +156,23 @@ def sample_edge(graph, rand1, rand2):
     k = int(rand1 * graph.number_of_edges())
     return k if rand2 < prob[k] else alias[k]
 
-def update(lu, lv, error_vector, label):
+def update(u, v, error_vector, label):
     """Update embedding
 
     Args:
-        lu (Number): The index of the source node
-        lv (Number): The index of the context node
+        u (Number): The index of the source node
+        v (Number): The index of the context node
         error_vector (array-like of Number): The 
         label ([type]): [description]
     """
     x, g = 0, 0
-    if lu not in embedding:
-        embedding[lu] = [np.random.random() - 0.5 / EMBEDDING_DIMENSION for _ in range(EMBEDDING_DIMENSION)]
-    if lv not in embedding:
-        embedding[lv] = [np.random.random() - 0.5 / EMBEDDING_DIMENSION for _ in range(EMBEDDING_DIMENSION)]
 
     for i in range(EMBEDDING_DIMENSION):
-        x += embedding[lu][i] * embedding[lv][i]
+        x += embedding[u][i] * embedding[v][i]
     g = (label - fast_sigmoid(x)) * rho
     for i in range(EMBEDDING_DIMENSION):
-        error_vector[i] += g * embedding[lv][i]
-        embedding[lv][i] += g * embedding[lu][i]
+        error_vector[i] += g * embedding[v][i]
+        embedding[v][i] += g * embedding[u][i]
 
 
 def line_thread(seed, graph):
@@ -191,28 +182,27 @@ def line_thread(seed, graph):
         seed (Number): It is the id of the thread, will be used as a random seed
         graph (Graph): the original graph
     """
-    print(f"Thread {seed} has been started")
+    print(f"Thread {seed} has been started", flush=True)
+    
     thread_id = seed
-    global embedding
+    global embedding, current_sample_count
     count = 0
     last_print = 0 #every now and then print whats happening
-    while count <= N_SAMPLES  / N_THREADS + 2:
+    while count <= N_SAMPLES / N_THREADS + 2:
         #give sign of life and update rho
         if count - last_print > 1e3:
-            current_sample_count = count - last_print
+            current_sample_count += count - last_print
             last_print = count
-            print(f"Thread {thread_id} had done {count} iterations and is willing to do more")
-            rho = initial_rho * (1 - current_sample_count / (N_SAMPLES - 1))
+            print(f"Thread {thread_id} had done {count} iterations and is willing to do more", flush=True)
+            rho = initial_rho * (1 - current_sample_count / (N_SAMPLES + 1))
             if rho < initial_rho * 1e-4:
                 rho = initial_rho * 1e-4
             
         #sample an edge
         edge = sample_edge(graph, np.random.random(), np.random.random())
         u, v = list(graph.edges)[edge]
-        lu = u
-        lv = v
-
         error_vector = [0 for _ in range(EMBEDDING_DIMENSION)]
+
         target, label = 0, 0
         for i in range(N_NEGATIVE_SAMPLING + 1):
             if i == 0:
@@ -222,14 +212,13 @@ def line_thread(seed, graph):
                 seed, rand_number = Rand(seed)
                 target = negative_table[rand_number]
                 label = 0
-            lv = target
-            update(lu, lv, error_vector, label)
+            update(u, target, error_vector, label)
 
         for i, val in enumerate(error_vector):
-            embedding[lu][i] = val 
+            embedding[u][i] += val 
         count += 1
 
-def line1(graph: Graph):
+def line1(graph: Graph, ):
     """Executes LINE1 method on the given graph
     Note: Line needs to be done on a directed graph
     if an undirected graph is given, a directed graph is generated
@@ -253,8 +242,8 @@ def line1(graph: DiGraph):
     Returns:
         dict: contains the pairs (node_id, embedding)
     """
-    global embedding, N_SAMPLES 
-    N_SAMPLES = min(N_SAMPLES, graph.number_of_edges())
+    global embedding, N_SAMPLES
+    N_SAMPLES = max(graph.number_of_edges(), graph.number_of_nodes())
     print("--------------------------------")
     print("Executing LINE-1 embedding method")
     print(f"Number of samples: {N_SAMPLES}")
@@ -267,11 +256,12 @@ def line1(graph: DiGraph):
     if not is_weighted(graph):
         set_edge_attributes(graph, values = 1, name = 'weight')
 
-    embedding = {}
+    embedding = {u: [(np.random.random() - 0.5) / EMBEDDING_DIMENSION for _ in range(EMBEDDING_DIMENSION)] 
+                for u in graph.nodes}
     #check if embedding has already been done (embedding will be saved in the end)
     graph_filename = "line1_" + weisfeiler_lehman_graph_hash(graph) + ".txt"
     if isfile(graph_filename):
-        with open(graph_filename, "r") as file:
+        with open(graph_filename, "rb") as file:
             embedding = pickle.loads(file.read())
         return embedding
             
@@ -285,16 +275,16 @@ def line1(graph: DiGraph):
         thread.start()
     for thread in threads:
         thread.join()
-    
+
     print(f"Embedding process ended. Total time was {time() - t_0}")
-    with open(graph_filename, 'w') as file:
+    with open(graph_filename, 'wb') as file:
         pickle.dump(embedding, file)
     return embedding
 
 #test this method
 if __name__ == "__main__":
-    from Datasets.datasets import Datasets, get_graph
+    graph = read_edgelist("./Datasets/WikiVote.txt", create_using=DiGraph(), nodetype=int, data=(('weight',float),))
 
-    embedding = line1(get_graph(Datasets.WikiVote))
+    embedding = line1(graph)
 
-    print(embedding)
+    # print(embedding)
