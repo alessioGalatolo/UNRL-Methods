@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.sparse as sparse
 from scipy.sparse import linalg
-import networkx
+import networkx as nx
 
 def vol(A):
     """Calculate volume of a graph
