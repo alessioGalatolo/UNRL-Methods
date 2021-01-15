@@ -47,8 +47,11 @@ def small_embedding(A, window, b, dimension):
         dimension (int): dimension of the embedding
     """
     volG = vol(A)
-
     diagD = A.sum(axis=1)
+    if (np.count_nonzero(diagD ==0) != 0):
+        A = A + A.T
+        volG = vol(A)
+        diagD = A.sum(axis=1)
     diagD = diagD.flatten().tolist()[0]
     diagDinv = np.array([1/Dj for Dj in diagD])
     Dinv = sparse.diags(diagDinv)
@@ -93,6 +96,10 @@ def large_embedding(A, window, b, dimension, h):
     """
     volG = vol(A)
     diagD = A.sum(axis=1)
+    if (np.count_nonzero(diagD ==0) != 0):
+        A = A + A.T
+        volG = vol(A)
+        diagD = A.sum(axis=1)
     diagD = diagD.flatten().tolist()[0]
     diagDrootinv = np.array([1/np.sqrt(Dj) for Dj in diagD])
     Drootinv = sparse.diags(diagDrootinv)
